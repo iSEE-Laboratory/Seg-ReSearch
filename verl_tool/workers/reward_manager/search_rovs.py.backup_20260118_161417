@@ -1,0 +1,312 @@
+"""
+Seg-zero style Reward Manager
+"""
+import torch
+import random
+import regex as re
+import json
+import time
+import os
+import numpy as np
+from verl import DataProto
+from verl.workers.reward_manager.registry import register
+from collections import defaultdict
+import math
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+
+def seg_iou_reward(pred, ground_truth):
+    def iou(box1, box2):
+        inter_x1 = max(box1[0], box2[0])
+        inter_y1 = max(box1[1], box2[1])
+        inter_x2 = min(box1[2], box2[2])
+        inter_y2 = min(box1[3], box2[3])
+        if inter_x1 < inter_x2 and inter_y1 < inter_y2:
+            inter = (inter_x2 - inter_x1 + 1) * (inter_y2 - inter_y1 + 1)
+        else:
+            inter = 0
+        area1 = (box1[2] - box1[0] + 1) * (box1[3] - box1[1] + 1)
+        area2 = (box2[2] - box2[0] + 1) * (box2[3] - box2[1] + 1)
+        union = area1 + area2 - inter
+        return float(inter) / union
+    try:
+        if iou(pred["bbox_2d"], ground_truth["bbox_2d"]) > 0.5:
+            return 1.0
+    except Exception:
+        pass
+    return 0.0
+
+def get_box_diagonal(bbox):
+    w = bbox[2] - bbox[0]
+    h = bbox[3] - bbox[1]
+    return math.sqrt(w**2 + h**2)
+
+def seg_point_l1_reward(pred, ground_truth):
+    def points_in_box(point, bbox):
+        return bbox[0] <= point[0] <= bbox[2] and bbox[1] <= point[1] <= bbox[3]
+
+    def points_distance(point1, point2):
+        return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
+
+    try:
+        if points_in_box(pred["point_2d"], pred["bbox_2d"]):
+            dist = points_distance(pred["point_2d"], ground_truth["point_2d"])
+            if dist < 100:
+                return 1.0
+    except Exception:
+        pass  # Continue to next verification method if this fails
+    return 0.0
+
+def seg_box_l1_reward(pred, ground_truth):
+    def l1_distance(box1, box2):
+        return (abs(box1[0] - box2[0]) + abs(box1[1] - box2[1]) + abs(box1[2] - box2[2]) + abs(box1[3] - box2[3])) / 4
+
+    try:
+        dist = l1_distance(pred["bbox_2d"], ground_truth["bbox_2d"])
+        if dist < 10:
+            return 1.0
+    except Exception:
+        pass  # Continue to next verification method if this fails
+    return 0.0
+
+def format_reward(response_str):
+    # check frame
+    pattern_frame = r"<thinking>.*?</thinking>\s*<keyframe>\s*(\d+)\s*</keyframe>"
+    frame_match = re.search(pattern_frame, response_str, re.S)
+    if not frame_match:
+        return 0.0
+    
+    # check answer
+    pattern_answer = r"<thinking>.*?</thinking>\s*<answer>\s*(.*?)\s*</answer>"
+    answer_match = re.search(pattern_answer, response_str, re.S)
+    
+    if answer_match:
+        try:
+            answer_content = answer_match.group(1).strip()
+            answer = json.loads(answer_content)
+            if (
+                set(answer.keys()) == {'bbox_2d', 'point_2d'}
+                and isinstance(answer['bbox_2d'], list) and len(answer['bbox_2d']) == 4
+                and all(isinstance(x, (int, float)) for x in answer['bbox_2d'])
+                and isinstance(answer['point_2d'], list) and len(answer['point_2d']) == 2
+                and all(isinstance(x, (int, float)) for x in answer['point_2d'])
+            ):
+                return 1.0
+        except Exception:
+            pass
+    return 0.0
+
+def accuracy_reward(response_str, ground_truth):
+    ground_truth = json.loads(ground_truth)
+
+    iou_reward = point_l1_reward = box_l1_reward = keyframe_reward = 0.0
+    try:
+        keyframe_match = re.search(r'<keyframe>\s*(\d+)\s*</keyframe>', response_str, re.S)
+        pred_frame = keyframe_match.group(1).strip()
+        
+        answer_match = re.search(r'<answer>(.*?)</answer>', response_str)
+        pred = answer_match.group(1).strip()
+        pred = json.loads(pred)
+        if pred_frame in ground_truth:
+            ground_truth = ground_truth[pred_frame]
+            iou_reward = seg_iou_reward(pred, ground_truth)
+            box_l1_reward = seg_box_l1_reward(pred, ground_truth)
+            point_l1_reward = seg_point_l1_reward(pred, ground_truth)
+            keyframe_reward = ground_truth.get('max_conn_area', 0)
+    except Exception:
+        pass
+
+    return iou_reward, box_l1_reward, point_l1_reward, keyframe_reward
+
+def gc_reward(response_str, p=0.7, budget=10):
+    pattern_search = r"<thinking>.*?</thinking>\s*<search>.*?</search>"
+    search_matches = re.findall(pattern_search, response_str, re.S)
+    answer_match = format_reward(response_str)
+    k = min(len(search_matches), budget) + answer_match
+    reward = 1 - (1 - p) ** k
+    return reward
+
+sentence_tranformers_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+def ig_reward(response_str, ground_truth_steps):
+    pattern = r'\{"name":\s*"text_search".*?"query":\s*"(.*?)"\}'
+    match = re.search(pattern, response_str, re.DOTALL)
+    reward = 0.0
+    if match:
+        query = match.group(1)
+        query_embedding = sentence_tranformers_model.encode([query])
+        truth_embeddings = sentence_tranformers_model.encode(ground_truth_steps)
+        similarities = cosine_similarity(query_embedding, truth_embeddings)
+        reward = similarities.max()
+    if reward > 0.5:
+        return 1.0
+    else:
+        return 0.0
+    # return reward
+
+def bp_reward(response_str):
+    pattern = (
+        r'^\s*'  
+        r'(?:<thinking>.*?</thinking>\s*<search>.*?</search>\s*)*' 
+        r'<thinking>.*?</thinking>\s*<keyframe>\s*\d+\s*</keyframe>\s*' 
+        r'<thinking>.*?</thinking>\s*<answer>.*?</answer>'
+        r'\s*$'
+    )
+    if re.match(pattern, response_str, re.DOTALL):
+        return 1.0
+    else:
+        return 0.0
+
+def lp_reward(response_str):
+    pattern_search = r"<thinking>.*?</thinking>\s*<search>.*?</search>"
+    search_matches = re.findall(pattern_search, response_str, re.S)
+    answer_match = format_reward(response_str)
+    return float(len(search_matches) + answer_match)
+
+def dense_reward(response_str, ground_truth_steps):
+    pattern = r'\{"name":\s*"text_search".*?"query":\s*"(.*?)"\}'
+    pred_queries = re.findall(pattern, response_str, re.DOTALL)
+    min_len = min(len(pred_queries), len(ground_truth_steps))
+    if min_len == 0:
+        return 0.0
+    preds_to_encode = pred_queries[:min_len]
+    gts_to_encode = ground_truth_steps[:min_len]
+    pred_embeddings = sentence_tranformers_model.encode(preds_to_encode)
+    gt_embeddings = sentence_tranformers_model.encode(gts_to_encode)
+    similarity_matrix = cosine_similarity(pred_embeddings, gt_embeddings)
+    aligned_scores = similarity_matrix.diagonal()
+    reward = float(np.sum(aligned_scores > 0.5))
+    return reward
+    
+@register("search_rvos")
+class SearchRvosRewardManager:
+    name = "search_rvos"
+    
+    def __init__(self, tokenizer=None, num_examine=1, compute_score=None, **kwargs) -> None:
+        self.tokenizer = tokenizer
+        self.num_examine = num_examine
+        self.compute_score = compute_score
+
+    def __call__(self, data: DataProto, return_dict=False):
+        """Compute rewards for Search-R1 style responses."""
+        # If there is rm score, we directly return rm score
+        if 'rm_scores' in data.batch.keys():
+            if return_dict:
+                reward_extra_keys = data.meta_info.get("reward_extra_keys", [])
+                reward_extra_info = {key: data.non_tensor_batch[key] for key in reward_extra_keys}
+                return {"reward_tensor": data.batch['rm_scores'], "reward_extra_info": reward_extra_info}
+            else:
+                return data.batch['rm_scores']
+
+        scores = [{} for _ in range(len(data))]
+        reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
+        already_print_data_sources = {}
+        reward_extra_info = defaultdict(list)
+
+        for i in range(len(data)):
+            data_item = data[i]
+            prompt_ids = data_item.batch['prompts']
+            prompt_length = prompt_ids.shape[-1]
+
+            valid_prompt_length = data_item.batch['attention_mask'][:prompt_length].sum()
+            valid_prompt_ids = prompt_ids[-valid_prompt_length:]
+
+            response_ids = data_item.batch['responses']
+            valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
+            valid_response_ids = response_ids[:valid_response_length]
+
+            # decode
+            response_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
+
+            # Get ground truth
+            if 'reward_model' in data_item.non_tensor_batch:
+                ground_truth = data_item.non_tensor_batch['reward_model']['ground_truth']
+            else:
+                # Fallback to direct ground truth or golden_answers
+                ground_truth = data_item.non_tensor_batch.get('ground_truth', 
+                              data_item.non_tensor_batch.get('golden_answers', []))
+
+            # Compute score
+            process_score = 0
+            ability = data_item.non_tensor_batch.get('ability', '')
+            steps = data_item.non_tensor_batch['reward_model'].get('steps', '')
+            if steps:
+                 ig_score = ig_reward(response_str, steps)
+                # process_score = ig_score * 0.5
+                 gc_score = gc_reward(response_str, budget=len(steps))
+                 process_score = 0.5 * (ig_score + gc_score)
+            else:
+                process_score = format_reward(response_str)
+
+            # process_score = bp_reward(response_str)
+            # process_score = lp_reward(response_str)
+            # process_score = dense_reward(response_str, steps) if steps else 0.0
+            
+            num_search = float(response_str.count('<search>'))
+
+            iou_score, box_l1_score, point_l1_score, keyframe_score = accuracy_reward(
+                response_str=response_str, 
+                ground_truth=ground_truth, 
+            )
+            
+            score = iou_score + box_l1_score + point_l1_score + keyframe_score + process_score
+
+            # outcome only
+            # score = iou_score + box_l1_score + point_l1_score + keyframe_score
+
+
+
+            if score > 0:
+                reward_extra_info['correct_response_length'].append(valid_response_length)
+            else:
+                reward_extra_info['wrong_response_length'].append(valid_response_length)
+
+            # update this score to the scores
+            scores[i] = {"score": score, "iou_score": iou_score, "box_l1_score": box_l1_score, "point_l1_score": point_l1_score, 'num_search': num_search, 'process_score': process_score, 'keyframe_score': keyframe_score}
+
+            reward_tensor[i, valid_response_length - 1] = score
+            
+            # Store ability information for validation metrics grouping
+            ability = data_item.non_tensor_batch.get('ability', 'unknown')
+            reward_extra_info['ability'].append(ability)
+
+            # Print examples for debugging
+            data_source = data_item.non_tensor_batch.get('data_source', 'unknown')
+            if data_source not in already_print_data_sources:
+                already_print_data_sources[data_source] = 0
+
+            # Save the records
+            tool_interact_info = data_item.non_tensor_batch.get('tool_interact_info', None)
+            if tool_interact_info is not None:
+                # crop the image
+                for info in tool_interact_info:
+                    if "image" in info:
+                        if isinstance(info['image'], list):
+                            info['image'] = [x[:50] for x in info['image']]  # crop the image to first 50 characters
+                        elif isinstance(info['image'], str):
+                            info['image'] = info['image'][:50]  # for debug
+
+        for i, score in enumerate(scores):
+            if isinstance(score, dict):
+                # convert the length to a Python int
+                length_i = data[i].batch['attention_mask'][data[i].batch['prompts'].shape[-1]:].sum().item()
+                # subtract 1 because you want the last *valid* token
+                reward_tensor[i, length_i - 1] = score['score']
+
+                for k, v in score.items():
+                    reward_extra_info[k].append(v)
+            else:
+                length_i = data[i].batch['attention_mask'][data[i].batch['prompts'].shape[-1]:].sum().item()
+                reward_tensor[i, length_i - 1] = score
+
+        correct_response_length_mean = np.mean(reward_extra_info['correct_response_length']) if reward_extra_info['correct_response_length'] else 0.0
+        wrong_response_length_mean = np.mean(reward_extra_info['wrong_response_length']) if reward_extra_info['wrong_response_length'] else 0.0
+        reward_extra_info['correct_response_length'] = [correct_response_length_mean] * len(reward_tensor)
+        reward_extra_info['wrong_response_length'] = [wrong_response_length_mean] * len(reward_tensor)
+
+        if return_dict: 
+            return {
+                "reward_tensor": reward_tensor,
+                "reward_extra_info": dict(sorted(reward_extra_info.items())),
+            }
+        else:
+            return reward_tensor
