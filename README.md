@@ -118,6 +118,11 @@ Based on the generated jsonl file, run the segmentation model to generate object
 python post_segmentation/sam2_okvos.py [path_to_jsonl]
 ```
 
+## 🧩 Web Browsing
+You can integrate an auxiliary LLM (e.g., `Qwen3-Next-80B-A3B-Instruct-FP8`) to act as a summarizer, empowering Seg-ReSearch with web browsing capabilities for more precise retrieval results. 
+
+To enable this feature, uncomment and configure the `SUMM_MODEL_URL` and `SUMM_MODEL_PATH` variables in `eval.sh`. Give it a try! 😊
+
 ## 🤝 Acknowledgements
 Our work is built upon [verl-tool](https://github.com/TIGER-AI-Lab/verl-tool), [Seg-Zero](https://github.com/JIA-Lab-research/Seg-Zero) and [SeC](https://github.com/OpenIXCLab/SeC). We sincerely appreciate these excellent works.
 
