@@ -76,7 +76,7 @@ bash examples/train/okvos/start_retrieval.sh
 
 2. Activate the `seg-research` environment and run one of the following scripts.
 
-**Qwen3-VL-4B-Instruct:**
+* **Qwen3-VL-4B-Instruct:**
 ```bash
 # GRPO Training
 bash examples/train/okvos/train_4b.sh 
@@ -85,7 +85,7 @@ bash examples/train/okvos/train_4b.sh
 bash examples/train/okvos/train_4b_dapo.sh
 ```
 
-**Qwen3-VL-8B-Instruct:** 
+* **Qwen3-VL-8B-Instruct:** 
 ```bash
 # GRPO Training
 bash examples/train/okvos/train_8b.sh 
