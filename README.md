@@ -1,6 +1,6 @@
 <div align="center">
 
-<h2>Seg-ReSearch: Segmentation with Interleaved Reasoning and External Search</h2>
+<h3>Seg-ReSearch: Segmentation with Interleaved Reasoning and External Search</h3>
 
 [![arXiv](https://img.shields.io/badge/arXiv-2602.04454-b31b1b.svg)](https://arxiv.org/abs/2602.04454)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
