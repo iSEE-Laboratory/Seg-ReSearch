@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @register_tool
 class MMSearchRetrievalTool(BaseTool):
-    tool_type = "mm_search_retrieval"
+    tool_type = "local_retrieval"
     
     def __init__(self, num_workers=1, retriever_url="http://127.0.0.1:8000/retrieve", topk=2,
                  img_retriever_url="http://127.0.0.1:8001/retrieve", topk_img=1, **kwargs):

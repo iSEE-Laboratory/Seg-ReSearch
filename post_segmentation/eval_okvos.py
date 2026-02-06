@@ -48,7 +48,7 @@ def eval_queue(q, rank, out_dict, pred_path):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--pred_dir", type=str, default="")
-    parser.add_argument("--meta_path", type=str, default="data/RVOS_Search_Test/meta_mapping.json")
+    parser.add_argument("--meta_path", type=str, default="data/OK_VOS/meta_mapping.json")
     args = parser.parse_args()
     args.save_name = os.path.join(os.path.dirname(args.pred_dir), "result.json")
 

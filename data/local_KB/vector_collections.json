@@ -1,0 +1,18 @@
+{
+  "collections": [
+    {
+      "name": "text",
+      "type": "faiss_file",
+      "index_path": "data/local_KB/e5_Flat.index",
+      "corpus_path": "data/local_KB/text_corpus.jsonl",
+      "faiss_gpu": true
+    },
+    {
+      "name": "image",
+      "type": "faiss_file",
+      "index_path": "data/local_KB/image_e5_Flat.index",
+      "corpus_path": "data/local_KB/image_corpus.jsonl",
+      "faiss_gpu": true
+    }
+  ]
+}

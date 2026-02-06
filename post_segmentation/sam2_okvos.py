@@ -1,8 +1,6 @@
 import sys
 import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__))))
-sys.path.append('SeC')
+sys.path.insert(0, os.path.join(os.getcwd(), 'sam2'))
 
 import tqdm
 _original_tqdm = tqdm.tqdm
@@ -20,9 +18,7 @@ import argparse
 from tqdm import tqdm
 import imageio
 import imageio.v3 as iio
-from SeC.inference.configuration_sec import SeCConfig
-from SeC.inference.modeling_sec import SeCModel
-from transformers import AutoTokenizer
+from sam2.build_sam import build_sam2_video_predictor
 import re
 from collections import defaultdict
 import json
@@ -42,15 +38,13 @@ def vis_add_mask(img_pil, mask, color=(0, 255, 0), alpha=0.5):
     vis_img[mask] = img[mask] * (1 - alpha) + mask_rgb[mask] * alpha
     return Image.fromarray(vis_img.astype(np.uint8))
 
-@torch.inference_mode()
-@torch.autocast(device_type="cuda", dtype=torch.bfloat16)
-def process_video(args, video_data, predictor, tokenizer, device):
+def process_video(args, video_data, predictor, device):
     video_path = video_data[0]['video_path']
 
     frame_names = sorted(os.listdir(video_path))
     
     video_len = len(frame_names)
-    state = predictor.grounding_encoder.init_state(video_path=video_path, async_loading_frames=False)
+    state = predictor.init_state(video_path=video_path)
     
     first_frame_path = os.path.join(video_path, frame_names[0])
     first_frame = Image.open(first_frame_path)
@@ -62,7 +56,7 @@ def process_video(args, video_data, predictor, tokenizer, device):
     point_scale = np.array([ratio_w, ratio_h], dtype=np.float32)
 
     for sample in video_data:
-        predictor.grounding_encoder.reset_state(state)
+        predictor.reset_state(state)
         
         id = sample['id']
         output = sample['output']
@@ -81,25 +75,11 @@ def process_video(args, video_data, predictor, tokenizer, device):
         except Exception as e:
             if DEBUG:
                 print(f"Incorrect format: {e} in ID: {id}")
-        
-        # fid *= 3
+
         prompted = False
         if 0 <= fid < video_len:
-            is_use_box = (box.any() and USE_BOX)
-            is_use_points = (points.any() and USE_POINT)
-            if is_use_box and is_use_points:
-                labels = np.array([1], np.int32)
-                _, out_obj_ids, out_mask_logits = predictor.grounding_encoder.add_new_points_or_box(
-                    inference_state=state,
-                    frame_idx=fid,
-                    obj_id=1,
-                    box=box,
-                    points=points,
-                    labels=labels
-                )
-                prompted = True
-            elif is_use_box:
-                _, out_obj_ids, out_mask_logits = predictor.grounding_encoder.add_new_points_or_box(
+            if box.any() and USE_BOX:
+                _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
                     inference_state=state,
                     frame_idx=fid,
                     obj_id=1,
@@ -107,9 +87,9 @@ def process_video(args, video_data, predictor, tokenizer, device):
                 )
                 prompted = True
 
-            elif is_use_points:
+            if points.any() and USE_POINT:
                 labels = np.array([1], np.int32)
-                _, out_obj_ids, out_mask_logits = predictor.grounding_encoder.add_new_points_or_box(
+                _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
                     inference_state=state,
                     frame_idx=fid,
                     obj_id=1,
@@ -120,11 +100,10 @@ def process_video(args, video_data, predictor, tokenizer, device):
 
         video_masks = np.zeros((video_len, img_height, img_width), dtype=bool)
         if prompted:
-            init_mask = (out_mask_logits[0] > 0.0).cpu().numpy()
-            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(state, start_frame_idx=fid, reverse=False, init_mask=init_mask, tokenizer=tokenizer):
-                video_masks[out_frame_idx] = (out_mask_logits > 0).cpu().numpy()
-            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(state, start_frame_idx=fid, reverse=True, init_mask=init_mask, tokenizer=tokenizer):
-                video_masks[out_frame_idx] = (out_mask_logits > 0).cpu().numpy()
+            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(state):
+                video_masks[out_frame_idx] = (out_mask_logits > 0).squeeze(1).cpu().numpy()
+            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(state, reverse=True):
+                video_masks[out_frame_idx] = (out_mask_logits > 0).squeeze(1).cpu().numpy()
 
         save_path = os.path.join(args.save_path, id)
         os.makedirs(save_path, exist_ok=True)
@@ -167,36 +146,20 @@ def process_video(args, video_data, predictor, tokenizer, device):
 def process_worker(args, data_list, device_id):
     torch.cuda.set_device(device_id)
     device = f"cuda:{device_id}"
-
-    config = SeCConfig.from_pretrained(args.model_path)
-    config.apply_postprocessing = False
-    config.hydra_overrides_extra = [
-        "++model.non_overlap_masks=true"
-    ]
-
-    model = SeCModel.from_pretrained(
-        args.model_path,
-        config=config, 
-        torch_dtype=torch.bfloat16, 
-        attn_implementation='eager',
-        use_flash_attn=True
-    ).eval().to('cuda')
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model_path,
-        trust_remote_code=True,
-        attn_implementation='eager'
-    )
+    sam2_checkpoint = "sam2/checkpoints/sam2.1_hiera_large.pt"
+    model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
+    predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
 
     with _original_tqdm(total=len(data_list), desc=f"GPU {device_id}", position=device_id, leave=True) as pbar:
         for data in data_list:
-            process_video(args, data, model, tokenizer, device)
+            process_video(args, data, predictor, device)
             pbar.update(1)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('file', type=str, nargs='?', help='Path to the jsonl data')
+    parser.add_argument('file', type=str, nargs='?', default="reuslts/RVOS_Search_Test_test_6_448_448_Qwen3-VL-4B-Instruct_eval/0.jsonl", help='Path to the preprocessed data')
     parser.add_argument('--vis', action='store_true', help='Visualize masks on original images')
-    parser.add_argument("--model_path", type=str, default='SeC/Sec-4B')
     args = parser.parse_args()
 
     with open(args.file, 'r', encoding='utf-8') as f:
