@@ -1,7 +1,7 @@
 #!/bin/bash
 set -x
 
-model_name="/data1/tianming/Qwen/Qwen3-VL-8B-Instruct"
+model_name="Qwen/Qwen3-VL-8B-Instruct"
 train_data=[$(pwd)/data/OK_VOS/train_6_448_448.parquet]
 val_data=[$(pwd)/data/OK_VOS/train_6_448_448.parquet]
 
