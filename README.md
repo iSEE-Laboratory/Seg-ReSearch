@@ -3,7 +3,7 @@
 <h3>Seg-ReSearch: Segmentation with Interleaved Reasoning and External Search</h3>
 
 [![arXiv](https://img.shields.io/badge/arXiv-2602.04454-b31b1b.svg)](https://arxiv.org/abs/2602.04454)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 [Tianming Liang](https://tmliang.github.io/)  &emsp;
 Qirui Du  &emsp;
