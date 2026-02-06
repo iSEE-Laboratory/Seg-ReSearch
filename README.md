@@ -18,12 +18,16 @@ ISEE Lab, Sun Yat-sen University
 </div>
 
 ## 🌟 Highlights
-![visual](assets/example.jpg)
+![visual](assets/example.png)
 Through multi-turn interleaved reasoning and web search, **Seg-ReSearch** is able to localize and segment any text-guided target in images or videos, even those involving new concepts or up-to-date information that lies beyond the internal knowledge of MLLMs.
 
+## 📢 News
+* **[2026/02/06]** All training and inference code for Seg-ReSearch has been released. Check it out!
+* **[2026/02/06]** We have released [**OK-VOS**](https://huggingface.co/datasets/iSEE-Laboratory/OK_VOS/tree/main), the first VOS Benchmark explicitly requiring external knowledge.
+* **[2026/02/04]** The paper is available on [arXiv](https://arxiv.org/abs/2602.04454).
 ## 🔎 Framework
-![model](assets/model.jpg)
-In order to identify the target objects involving new information, Seg-ReSearch conducts multi-turn interactions with the external search engine throughout the dynamic Multi-modal Chain-of-Thought (MCoT). This capability is incentivized by a hierarchical reward design: IGR pilots the initial planning, TPR encourages extensive exploration, and OR ensures final task accuracy.
+![model](assets/model.png)
+**Seg-ReSearch** conducts multi-turn interactions with the search engine throughout the dynamic Multi-modal Chain-of-Thought (MCoT). This capability is incentivized by a hierarchical reward design: **IGR** pilots the initial planning, **TPR** encourages extensive exploration, and **OR** ensures final task accuracy.
 
 ## ⚙️ Getting Started
 To support Qwen3-VL, we use `verl==0.7.0.dev0` and `vllm==0.11.0`, which require `pytorch>=2.8.0` and `cuda>=12.6`.
