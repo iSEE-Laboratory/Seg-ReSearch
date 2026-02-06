@@ -123,7 +123,7 @@ You can integrate an auxiliary LLM (e.g., `Qwen3-Next-80B-A3B-Instruct-FP8`) to 
 
 To enable this feature, 
 
-1. **Launch the LLM service:**
+1. Launch the LLM service:
 ```bash
 vllm serve Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 \
      --port 8000 \
