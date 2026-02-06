@@ -86,6 +86,9 @@ bash examples/train/okvos/train_4b_dapo.sh
 ```
 
 * **Qwen3-VL-8B-Instruct:** 
+
+Note: We set `tensor_model_parallel_size=2` for 48G GPU memory. You can reduce it to 1 if you have larger memory.
+
 ```bash
 # GRPO Training
 bash examples/train/okvos/train_8b.sh 
@@ -93,7 +96,6 @@ bash examples/train/okvos/train_8b.sh
 # DAPO Training
 bash examples/train/okvos/train_8b_dapo.sh
 ```
-Note: We set `tensor_model_parallel_size=2` for 48G GPU memory. You can reduce it to 1 if you have larger memory.
 
 ## 📊 Evaluation
 
