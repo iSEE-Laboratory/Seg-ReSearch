@@ -22,9 +22,9 @@ ISEE Lab, Sun Yat-sen University
 Through multi-turn interleaved reasoning and web search, **Seg-ReSearch** is able to localize and segment any text-guided target in images or videos, even those involving new concepts or up-to-date information that lies beyond the internal knowledge of MLLMs.
 
 ## 📢 News
-* **[2026/02/06]** All training and inference code for Seg-ReSearch has been released. Check it out!
-* **[2026/02/06]** We have released [**OK-VOS**](https://huggingface.co/datasets/iSEE-Laboratory/OK_VOS/tree/main), a challenging VOS Benchmark explicitly requiring external knowledge.
-* **[2026/02/04]** The paper is available on [arXiv](https://arxiv.org/abs/2602.04454).
+* [2026/02/06] All training and inference code for Seg-ReSearch has been released. Check it out!
+* [2026/02/06] We have released [**OK-VOS**](https://huggingface.co/datasets/iSEE-Laboratory/OK_VOS/tree/main), a challenging VOS Benchmark explicitly requiring external knowledge.
+* [2026/02/04] The paper is available on [arXiv](https://arxiv.org/abs/2602.04454).
 ## 🔎 Framework
 ![model](assets/model.png)
 **Seg-ReSearch** conducts multi-turn interactions with the search engine throughout the dynamic Multi-modal Chain-of-Thought (MCoT). This capability is incentivized by a hierarchical reward design: **IGR** pilots the initial planning, **TPR** encourages extensive exploration, and **OR** ensures final task accuracy.
