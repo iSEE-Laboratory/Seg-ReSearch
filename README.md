@@ -119,9 +119,24 @@ python post_segmentation/sam2_okvos.py [path_to_jsonl]
 ```
 
 ## 🧩 Web Browsing
-You can integrate an auxiliary LLM (e.g., `Qwen3-Next-80B-A3B-Instruct-FP8`) to act as a summarizer, empowering Seg-ReSearch with web browsing capabilities for more precise retrieval results. 
+You can integrate an auxiliary LLM (e.g., `Qwen3-Next-80B-A3B-Instruct-FP8`) to act as a summarizer, empowering Seg-ReSearch with web browsing capabilities for more precise retrieval results. Give it a try! 😊
 
-To enable this feature, uncomment and configure the `SUMM_MODEL_URL` and `SUMM_MODEL_PATH` variables in `eval.sh`. Give it a try! 😊
+To enable this feature, 
+
+1. **Launch the LLM service:**
+```bash
+vllm serve Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 \
+     --port 8000 \
+     --tensor-parallel-size 2 \
+     --max-model-len 262144
+```
+1. Then, set the `SUMM_MODEL_URL` and `SUMM_MODEL_PATH` in `eval.sh`, like 
+```bash
+export SUMM_MODEL_URL="http://localhost:8000/v1"
+export SUMM_MODEL_PATH="Qwen/Qwen3-Next-80B-A3B-Instruct-FP8"
+```
+
+
 
 ## 🤝 Acknowledgements
 Our work is built upon [verl-tool](https://github.com/TIGER-AI-Lab/verl-tool), [Seg-Zero](https://github.com/JIA-Lab-research/Seg-Zero) and [SeC](https://github.com/OpenIXCLab/SeC). We sincerely appreciate these excellent works.
