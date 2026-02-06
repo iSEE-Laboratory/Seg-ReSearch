@@ -130,7 +130,7 @@ vllm serve Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 \
      --tensor-parallel-size 2 \
      --max-model-len 262144
 ```
-1. Then, set the `SUMM_MODEL_URL` and `SUMM_MODEL_PATH` in `eval.sh`, like 
+2. Then, set the `SUMM_MODEL_URL` and `SUMM_MODEL_PATH` in `eval.sh`, like 
 ```bash
 export SUMM_MODEL_URL="http://localhost:8000/v1"
 export SUMM_MODEL_PATH="Qwen/Qwen3-Next-80B-A3B-Instruct-FP8"
