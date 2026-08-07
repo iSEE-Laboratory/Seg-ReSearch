@@ -149,8 +149,7 @@ Our work is built upon [verl-tool](https://github.com/TIGER-AI-Lab/verl-tool), [
 ## 📜 Citation
 If you find our work helpful for your research, please consider citing our paper.
 ```bibtex
-@inproceedings{
-liang2026segresearch,
+@inproceedings{liang2026segresearch,
 title={Seg-ReSearch: Segmentation with Interleaved Reasoning and External Search},
 author={Tianming Liang and Qirui Du and Jian-Fang Hu and Haichao Jiang and Zicheng Lin and Wei-Shi Zheng},
 booktitle={Forty-third International Conference on Machine Learning},
